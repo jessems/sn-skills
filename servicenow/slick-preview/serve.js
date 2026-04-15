@@ -31,7 +31,8 @@ const md = new MarkdownIt({ html: true, linkify: true, typographer: false });
 // ---------------------------------------------------------------------------
 // Mermaid extraction & PNG rendering
 // ---------------------------------------------------------------------------
-const pngCache = new Map(); // contentHash -> base64 PNG
+const pngCache = new Map();       // contentHash -> base64 PNG
+const pngBufferCache = new Map(); // contentHash -> raw Buffer
 
 function extractMermaidBlocks(source) {
   const blocks = [];
@@ -45,7 +46,7 @@ function extractMermaidBlocks(source) {
 
 function renderPng(mermaidCode) {
   var hash = crypto.createHash('sha256').update(mermaidCode).digest('hex').slice(0, 16);
-  if (pngCache.has(hash)) return pngCache.get(hash);
+  if (pngCache.has(hash)) return { b64: pngCache.get(hash), hash: hash };
 
   var tmpDir = path.join(require('node:os').tmpdir(), 'publish-preview');
   if (!fs.existsSync(tmpDir)) fs.mkdirSync(tmpDir, { recursive: true });
@@ -60,9 +61,10 @@ function renderPng(mermaidCode) {
       stdio: 'pipe',
     });
     var png = fs.readFileSync(outFile);
+    pngBufferCache.set(hash, png);
     var b64 = 'data:image/png;base64,' + png.toString('base64');
     pngCache.set(hash, b64);
-    return b64;
+    return { b64: b64, hash: hash };
   } catch (err) {
     console.error('mmdc failed for block:', err.message);
     return null;
@@ -71,7 +73,8 @@ function renderPng(mermaidCode) {
 
 function renderAllPngs(blocks) {
   return blocks.map(function (b) {
-    return { id: b.id, code: b.code, png: renderPng(b.code) };
+    var result = renderPng(b.code);
+    return { id: b.id, code: b.code, png: result ? result.b64 : null, hash: result ? result.hash : null };
   });
 }
 
@@ -90,7 +93,9 @@ function buildHtml(source) {
   enrichedBlocks.forEach(function (b, i) {
     var placeholder = '<!--MERMAID_PLACEHOLDER_' + (i + 1) + '-->';
     var pngDataAttr = b.png ? ' data-png="' + b.png + '"' : '';
-    var diagramHtml = '<div class="mermaid-container"' + pngDataAttr + '>'
+    var pngUrlAttr = b.hash ? ' data-png-url="/mermaid-png/' + b.hash + '.png"' : '';
+    var codeAttr = ' data-code="' + escapeHtml(b.code) + '"';
+    var diagramHtml = '<div class="mermaid-container"' + pngDataAttr + pngUrlAttr + codeAttr + '>'
       + '<pre class="mermaid">' + escapeHtml(b.code) + '</pre></div>';
     htmlBody = htmlBody.replace(placeholder, diagramHtml);
   });
@@ -103,41 +108,64 @@ function buildHtml(source) {
     + '<style>'
     + 'body { max-width: 980px; margin: 0 auto; padding: 32px 16px; }'
     + '.markdown-body { font-size: 16px; }'
-    + '#copy-btn { position: fixed; top: 12px; right: 12px; z-index: 1000; '
-    + '  padding: 6px 14px; border: 1px solid #d0d7de; border-radius: 6px; '
+    + '.copy-btns { position: fixed; top: 12px; right: 12px; z-index: 1000; display: flex; flex-direction: column; gap: 6px; }'
+    + '.copy-btns button { padding: 6px 14px; border: 1px solid #d0d7de; border-radius: 6px; '
     + '  background: #f6f8fa; cursor: pointer; font-size: 13px; font-family: -apple-system, sans-serif; '
-    + '  box-shadow: 0 1px 3px rgba(0,0,0,0.08); transition: background 0.15s; }'
-    + '#copy-btn:hover { background: #eaeef2; }'
-    + '#copy-btn svg { vertical-align: -2px; margin-right: 5px; }'
+    + '  box-shadow: 0 1px 3px rgba(0,0,0,0.08); transition: background 0.15s; white-space: nowrap; }'
+    + '.copy-btns button:hover { background: #eaeef2; }'
+    + '.copy-btns button svg { vertical-align: -2px; margin-right: 5px; }'
     + '</style>'
     + '</head><body>'
-    + '<button id="copy-btn"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1" ry="1"/></svg>Copy as HTML</button>'
+    + '<div class="copy-btns">'
+    + '<button id="copy-confluence"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1" ry="1"/></svg>Copy for Confluence</button>'
+    + '<button id="copy-servicenow"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1" ry="1"/></svg>Copy for ServiceNow</button>'
+    + '</div>'
     + '<article class="markdown-body">'
     + htmlBody
     + '</article>'
     + '<script>'
     + 'mermaid.initialize({ startOnLoad: true, theme: "default" });'
     + '(function() {'
-    + '  var btn = document.getElementById("copy-btn");'
-    + '  btn.addEventListener("click", function() {'
+    + '  var clipIcon = \'<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1" ry="1"/></svg>\';'
+    + '  var checkIcon = \'<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#1a7f37" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>\';'
+    + '  function flashDone(btn, label) {'
+    + '    btn.innerHTML = checkIcon + "Copied!";'
+    + '    setTimeout(function() { btn.innerHTML = clipIcon + label; }, 1500);'
+    + '  }'
+    + '  function extractDiagramTitle(code) {'
+    + '    var yamlMatch = code.match(/^---[\\s\\S]*?title:\\s*(.+?)[\\s\\S]*?---/m);'
+    + '    if (yamlMatch) return yamlMatch[1].trim();'
+    + '    var titleMatch = code.match(/^\\s*title[\\s:]+(.+)/im);'
+    + '    if (titleMatch) return titleMatch[1].trim();'
+    + '    return code.trim().split("\\n")[0].trim() || "Diagram";'
+    + '  }'
+    + '  document.getElementById("copy-confluence").addEventListener("click", function() {'
+    + '    var btn = this;'
+    + '    var clone = document.querySelector(".markdown-body").cloneNode(true);'
+    + '    var containers = clone.querySelectorAll(".mermaid-container");'
+    + '    for (var i = 0; i < containers.length; i++) {'
+    + '      var code = containers[i].getAttribute("data-code") || "";'
+    + '      var title = extractDiagramTitle(code);'
+    + '      var placeholder = document.createElement("div");'
+    + '      placeholder.setAttribute("style", "border:2px dashed #d0d7de;padding:16px;margin:16px 0;background:#f6f8fa;color:#57606a;font-family:-apple-system,sans-serif;font-size:14px;text-align:center;border-radius:6px;");'
+    + '      placeholder.textContent = "[ Diagram placeholder: \\"" + title + "\\" — paste image here ]";'
+    + '      containers[i].parentNode.replaceChild(placeholder, containers[i]);'
+    + '    }'
+    + '    var blob = new Blob([clone.innerHTML], { type: "text/html" });'
+    + '    navigator.clipboard.write([new ClipboardItem({ "text/html": blob })]).then(function() { flashDone(btn, "Copy for Confluence"); });'
+    + '  });'
+    + '  document.getElementById("copy-servicenow").addEventListener("click", function() {'
+    + '    var btn = this;'
     + '    var clone = document.querySelector(".markdown-body").cloneNode(true);'
     + '    var containers = clone.querySelectorAll(".mermaid-container[data-png]");'
     + '    for (var i = 0; i < containers.length; i++) {'
     + '      var img = document.createElement("img");'
     + '      img.src = containers[i].getAttribute("data-png");'
-    + '      img.setAttribute("width", "100%");'
-    + '      img.style.maxWidth = "100%";'
-    + '      img.style.height = "auto";'
-    + '      containers[i].innerHTML = "";'
-    + '      containers[i].appendChild(img);'
+    + '      img.setAttribute("width", "100%"); img.style.maxWidth = "100%"; img.style.height = "auto";'
+    + '      containers[i].innerHTML = ""; containers[i].appendChild(img);'
     + '    }'
     + '    var blob = new Blob([clone.innerHTML], { type: "text/html" });'
-    + '    var clipIcon = \'<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1" ry="1"/></svg>\';'
-    + '    var checkIcon = \'<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#1a7f37" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>\';'
-    + '    navigator.clipboard.write([new ClipboardItem({ "text/html": blob })]).then(function() {'
-    + '      btn.innerHTML = checkIcon + "Copied!";'
-    + '      setTimeout(function() { btn.innerHTML = clipIcon + "Copy as HTML"; }, 1500);'
-    + '    });'
+    + '    navigator.clipboard.write([new ClipboardItem({ "text/html": blob })]).then(function() { flashDone(btn, "Copy for ServiceNow"); });'
     + '  });'
     + '})();'
     + '(function() {'
@@ -223,6 +251,18 @@ function handler(req, res) {
 
   if (req.url === '/events') {
     addSseClient(res);
+    return;
+  }
+
+  if (req.url.startsWith('/mermaid-png/')) {
+    var hash = path.basename(req.url, '.png');
+    if (pngBufferCache.has(hash)) {
+      res.writeHead(200, { 'Content-Type': 'image/png', 'Cache-Control': 'public, max-age=86400' });
+      res.end(pngBufferCache.get(hash));
+      return;
+    }
+    res.writeHead(404);
+    res.end('Not found');
     return;
   }
 
