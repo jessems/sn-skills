@@ -1,0 +1,9 @@
+{
+  "name": "publish-preview",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Local markdown preview server with Mermaid diagram support",
+  "dependencies": {
+    "markdown-it": "^14.1.0"
+  }
+}
