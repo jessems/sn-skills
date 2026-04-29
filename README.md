@@ -1,21 +1,21 @@
-# skills — Claude Code Skills by jessems
+# servicenow — Claude Code Skills
 
-A collection of [agent skills](https://vercel.com/docs/agent-resources/skills) for [Claude Code](https://claude.ai/claude-code).
+A collection of [agent skills](https://vercel.com/docs/agent-resources/skills) for working with ServiceNow in [Claude Code](https://claude.ai/claude-code).
 
-## Install all skills
+## Install
 
 ```bash
-npx skills add jessems/skills
+npx skills add jessems/servicenow
 ```
 
 Or install a specific skill:
 
 ```bash
-npx skills add jessems/skills --skill slick-preview
-npx skills add jessems/skills --skill snow-docs
+npx skills add jessems/servicenow --skill slick-preview
+npx skills add jessems/servicenow --skill snow-docs
 ```
 
-## ServiceNow
+## Skills
 
 ### `slick-preview`
 
