@@ -12,7 +12,7 @@ Render a markdown file as a GitHub-styled HTML page with interactive Mermaid dia
 
 1. **Detect the target file**: If the user provided an argument (e.g., `/slick-preview docs/foo.md`), use that path. Otherwise, look at the conversation context for the most recently discussed `.md` file. If ambiguous, ask the user which file to preview.
 
-2. **Resolve the path**: Convert relative paths to absolute using the project root (`/Users/jmscdch/Development/Bithawk/amag`). Verify the file exists.
+2. **Resolve the path**: Convert relative paths to absolute using the current project root (the session's working directory). Verify the file exists.
 
 3. **One-time setup**: Check if `node_modules` exists in `.claude/skills/slick-preview/`. If not, run:
    ```bash

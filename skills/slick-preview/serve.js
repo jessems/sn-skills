@@ -13,7 +13,7 @@ const crypto = require('node:crypto');
 const PORT_START = 3333;
 const PORT_END = 3343;
 const DEBOUNCE_MS = 300;
-const MMDC = '/Users/jmscdch/.nvm/versions/node/v22.17.0/bin/mmdc';
+const MMDC = (() => { try { return execSync('which mmdc', { stdio: ['pipe','pipe','pipe'] }).toString().trim(); } catch (_) { return 'mmdc'; } })();
 
 const mdFilePath = path.resolve(process.argv[2] || '');
 if (!mdFilePath || !fs.existsSync(mdFilePath)) {
