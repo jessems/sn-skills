@@ -1,8 +1,10 @@
 # sn-skills — Claude Code Skills for ServiceNow
 
-A collection of [agent skills](https://vercel.com/docs/agent-resources/skills) for working with ServiceNow in [Claude Code](https://claude.ai/claude-code).
+A collection of [Claude Code skills](https://docs.anthropic.com/en/docs/claude-code/skills) that make working with ServiceNow faster and smarter.
 
 ## Install
+
+Install all skills at once:
 
 ```bash
 npx skills add jessems/sn-skills
@@ -11,25 +13,61 @@ npx skills add jessems/sn-skills
 Or install a specific skill:
 
 ```bash
-npx skills add jessems/sn-skills --skill slick-preview
-npx skills add jessems/sn-skills --skill snow-docs
+npx skills add jessems/sn-skills --skill sn-docs
+npx skills add jessems/sn-skills --skill sn-md-preview
 ```
+
+---
 
 ## Skills
 
-### `slick-preview`
+### `sn-docs` — ServiceNow Documentation Search & Fetch
 
-Render a markdown file as a GitHub-styled HTML page with interactive Mermaid diagrams, served locally with live reload.
+Search and fetch ServiceNow documentation as clean Markdown — directly in your Claude Code session.
 
-- Renders Mermaid diagrams as interactive SVG (with PNG fallback)
-- "Copy for Confluence" — copies HTML with diagram placeholders
-- "Copy for ServiceNow" — copies HTML with diagrams embedded as 2x PNGs
-- Auto-reloads the browser when the file changes
+**Usage:**
 
-**Requires:** Node.js, [`mmdc`](https://github.com/mermaid-js/mermaid-cli) (`npm i -g @mermaid-js/mermaid-cli`)
+```
+/sn-docs how does GlideRecord work
+/sn-docs https://www.servicenow.com/docs/r/australia/api-reference/...
+```
 
-### `snow-docs`
+- Pass a plain search query or a `docs.servicenow.com` URL
+- Returns full page content as Markdown, cited with the source URL
+- Always fetches from the latest release (currently Australia) unless you specify otherwise
+- Works anonymously — no login, no browser, no Playwright needed
 
-Search and fetch ServiceNow documentation as clean Markdown. Accepts a search query or a `docs.servicenow.com` URL.
+Claude will proactively use this skill whenever you ask about ServiceNow behavior, OOB functionality, APIs, table schemas, or anything that benefits from authoritative documentation.
 
-Use it whenever you need to know how something works in ServiceNow — OOB behavior, API reference, table schemas, etc.
+---
+
+### `sn-md-preview` — Markdown Preview with Mermaid & Live Reload
+
+Render any Markdown file as a polished, GitHub-styled HTML page served locally — with live reload and Mermaid diagram support.
+
+**Usage:**
+
+```
+/sn-md-preview docs/my-design.md
+```
+
+Or just say "preview this file" when a `.md` file is already in context.
+
+**Features:**
+
+- Renders Mermaid diagrams as interactive SVGs
+- Live reload — browser auto-refreshes as you edit the file
+- **"Copy as HTML"** button — copies the full page with Mermaid diagrams embedded as 2x PNGs, ready to paste into Confluence or ServiceNow knowledge articles
+- Say "stop preview" to shut the server down
+
+**Requires:** Node.js and [`mmdc`](https://github.com/mermaid-js/mermaid-cli)
+
+```bash
+npm install -g @mermaid-js/mermaid-cli
+```
+
+---
+
+## Contributing
+
+Skills live in `skills/<skill-name>/`. Each skill has a `SKILL.md` that defines the skill's name, description, and instructions for Claude.
