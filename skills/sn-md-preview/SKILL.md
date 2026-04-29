@@ -1,27 +1,27 @@
 ---
-name: slick-preview
+name: sn-md-preview
 description: Render a markdown file as a GitHub-styled HTML page with Mermaid diagrams, served locally with live reload. Copy as formatted HTML with embedded PNGs for Confluence.
 user_invocable: true
 ---
 
-# slick-preview
+# sn-md-preview
 
 Render a markdown file as a GitHub-styled HTML page with interactive Mermaid diagrams, served locally with live reload. "Copy as HTML" button copies formatted content with embedded 2x PNGs for pasting into Confluence/docs.
 
 ## Instructions
 
-1. **Detect the target file**: If the user provided an argument (e.g., `/slick-preview docs/foo.md`), use that path. Otherwise, look at the conversation context for the most recently discussed `.md` file. If ambiguous, ask the user which file to preview.
+1. **Detect the target file**: If the user provided an argument (e.g., `/sn-md-preview docs/foo.md`), use that path. Otherwise, look at the conversation context for the most recently discussed `.md` file. If ambiguous, ask the user which file to preview.
 
 2. **Resolve the path**: Convert relative paths to absolute using the current project root (the session's working directory). Verify the file exists.
 
-3. **One-time setup**: Check if `node_modules` exists in `.claude/skills/slick-preview/`. If not, run:
+3. **One-time setup**: Check if `node_modules` exists in `.claude/skills/sn-md-preview/`. If not, run:
    ```bash
-   npm install --prefix .claude/skills/slick-preview
+   npm install --prefix .claude/skills/sn-md-preview
    ```
 
 4. **Launch the server**: Run the serve script in the background:
    ```bash
-   node .claude/skills/slick-preview/serve.js "<absolute-path-to-md-file>"
+   node .claude/skills/sn-md-preview/serve.js "<absolute-path-to-md-file>"
    ```
    Use the Bash tool with `run_in_background: true`.
 
