@@ -86,7 +86,7 @@ function buildHtml(source) {
   var stripped = source.replace(/\[\[([^\]|]+)\|([^\]]+)\]\]/g, '$2')
     .replace(/\[\[([^\]]+)\]\]/g, '$1');
   var result = extractMermaidBlocks(stripped);
-  var htmlBody = md.render(result.cleaned);
+  var htmlBody = makeAccordions(md.render(result.cleaned));
   var enrichedBlocks = renderAllPngs(result.blocks);
 
   // Replace placeholders with dual containers
@@ -95,9 +95,16 @@ function buildHtml(source) {
     var pngDataAttr = b.png ? ' data-png="' + b.png + '"' : '';
     var pngUrlAttr = b.hash ? ' data-png-url="/mermaid-png/' + b.hash + '.png"' : '';
     var codeAttr = ' data-code="' + escapeHtml(b.code) + '"';
-    var diagramHtml = '<div class="mermaid-container"' + pngDataAttr + pngUrlAttr + codeAttr + '>'
+    var diagramHtml = '<div class="mermaid-container"' + pngDataAttr + pngUrlAttr + codeAttr + ' data-zoom="1">'
+      + '<div class="mermaid-toolbar">'
+      + '<div class="mermaid-zoom-controls">'
+      + '<button class="mermaid-zoom-btn zoom-out" title="Zoom out"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/></svg></button>'
+      + '<span class="mermaid-zoom-level">100%</span>'
+      + '<button class="mermaid-zoom-btn zoom-in" title="Zoom in"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg></button>'
+      + '</div>'
       + '<button class="diagram-copy-btn" title="Copy diagram as PNG"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1" ry="1"/></svg></button>'
-      + '<pre class="mermaid">' + escapeHtml(b.code) + '</pre></div>';
+      + '</div>'
+      + '<div class="mermaid-zoom-wrap"><pre class="mermaid">' + escapeHtml(b.code) + '</pre></div></div>';
     htmlBody = htmlBody.replace(placeholder, diagramHtml);
   });
 
@@ -110,23 +117,49 @@ function buildHtml(source) {
     + 'body { max-width: 980px; margin: 0 auto; padding: 32px 16px; }'
     + '.markdown-body { font-size: 16px; }'
     + '.mermaid-container { position: relative; }'
-    + '.diagram-copy-btn { position: absolute; top: 8px; right: 8px; z-index: 10; '
-    + '  padding: 4px 6px; border: 1px solid #d0d7de; border-radius: 5px; '
+    + '.mermaid-toolbar { position: absolute; top: 8px; right: 8px; z-index: 10; display: flex; align-items: center; gap: 6px; opacity: 0; transition: opacity 0.15s; }'
+    + '.mermaid-container:hover .mermaid-toolbar { opacity: 1; }'
+    + '.mermaid-zoom-controls { display: flex; align-items: center; border: 1px solid #d0d7de; border-radius: 5px; background: rgba(246,248,250,0.9); box-shadow: 0 1px 3px rgba(0,0,0,0.08); overflow: hidden; }'
+    + '.mermaid-zoom-btn { padding: 4px 7px; border: none; background: transparent; cursor: pointer; line-height: 0; color: #57606a; }'
+    + '.mermaid-zoom-btn:hover { background: #eaeef2; color: #24292f; }'
+    + '.mermaid-zoom-level { font-size: 11px; font-family: ui-monospace,"SF Mono",Menlo,monospace; color: #57606a; min-width: 36px; text-align: center; user-select: none; border-left: 1px solid #d0d7de; border-right: 1px solid #d0d7de; padding: 3px 2px; cursor: pointer; }'
+    + '.mermaid-zoom-level:hover { background: #eaeef2; color: #24292f; }'
+    + '.mermaid-zoom-wrap { overflow: hidden; cursor: grab; }'
+    + '.mermaid-zoom-wrap.panning { cursor: grabbing; user-select: none; }'
+    + '.mermaid-zoom-wrap > .mermaid { transform-origin: top left; transition: transform 0.15s ease; }'
+    + '.mermaid-zoom-wrap > .mermaid svg { max-width: 100%; height: auto; }'
+    + '.diagram-copy-btn { padding: 4px 6px; border: 1px solid #d0d7de; border-radius: 5px; '
     + '  background: rgba(246,248,250,0.9); cursor: pointer; line-height: 0; '
-    + '  box-shadow: 0 1px 3px rgba(0,0,0,0.08); opacity: 0; transition: opacity 0.15s; }'
-    + '.mermaid-container:hover .diagram-copy-btn { opacity: 1; }'
+    + '  box-shadow: 0 1px 3px rgba(0,0,0,0.08); }'
     + '.diagram-copy-btn:hover { background: #eaeef2; }'
-    + '.copy-btns { position: fixed; top: 12px; right: 12px; z-index: 1000; display: flex; flex-direction: column; gap: 6px; }'
-    + '.copy-btns button { padding: 6px 14px; border: 1px solid #d0d7de; border-radius: 6px; '
-    + '  background: #f6f8fa; cursor: pointer; font-size: 13px; font-family: -apple-system, sans-serif; '
-    + '  box-shadow: 0 1px 3px rgba(0,0,0,0.08); transition: background 0.15s; white-space: nowrap; }'
-    + '.copy-btns button:hover { background: #eaeef2; }'
-    + '.copy-btns button svg { vertical-align: -2px; margin-right: 5px; }'
+    + '.fab-wrap { position: fixed; top: 16px; right: 16px; z-index: 1000; }'
+    + '.fab-btn { width: 42px; height: 42px; border-radius: 50%; background: #2da44e; border: none; cursor: pointer; display: flex; align-items: center; justify-content: center; color: #fff; padding: 0; box-shadow: 0 2px 8px rgba(45,164,78,0.4), 0 1px 3px rgba(0,0,0,0.12); transition: background 0.15s, transform 0.15s, box-shadow 0.15s; }'
+    + '.fab-btn:hover { background: #2c974b; transform: scale(1.07); box-shadow: 0 4px 14px rgba(45,164,78,0.5), 0 2px 4px rgba(0,0,0,0.12); }'
+    + '.fab-btn.open { background: #1f7d3a; transform: scale(0.94); }'
+    + '.fab-options { position: absolute; top: 0; right: calc(100% + 10px); display: flex; flex-direction: column; align-items: flex-end; gap: 8px; pointer-events: none; }'
+    + '.fab-opt { padding: 0 15px; height: 34px; border-radius: 17px; background: #fff; border: 1px solid rgba(0,0,0,0.1); cursor: pointer; font-size: 12px; font-family: ui-monospace,"SF Mono",Menlo,monospace; font-weight: 500; letter-spacing: 0.03em; color: #24292f; box-shadow: 0 2px 8px rgba(0,0,0,0.09), 0 1px 2px rgba(0,0,0,0.05); white-space: nowrap; opacity: 0; transform: translateX(10px); transition: opacity 0.2s ease, transform 0.2s ease, background 0.12s; pointer-events: none; }'
+    + '.fab-opt:hover { background: #f3f4f6; }'
+    + '.fab-options.open { pointer-events: auto; }'
+    + '.fab-options.open .fab-opt { opacity: 1; transform: translateX(0); pointer-events: auto; }'
+    + '.fab-options.open .fab-opt:nth-child(1) { transition-delay: 0.03s; }'
+    + '.fab-options.open .fab-opt:nth-child(2) { transition-delay: 0.07s; }'
+    + 'details { margin-top: 24px; }'
+    + 'details > summary { list-style: none; cursor: pointer; position: relative; }'
+    + 'details > summary::-webkit-details-marker { display: none; }'
+    + 'details > summary::before { content: "▶"; position: absolute; left: -1.4em; top: 50%; transform: translateY(-50%); font-size: 0.55em; transition: opacity 0.15s, transform 0.15s; color: #57606a; opacity: 0; }'
+    + 'details > summary:hover::before { opacity: 0.5; }'
+    + 'details[open] > summary::before { transform: translateY(-50%) rotate(90deg); }'
+    + 'details[open] > summary:hover::before { opacity: 0.5; }'
+    + 'details > summary > h1, details > summary > h2, details > summary > h3, details > summary > h4, details > summary > h5, details > summary > h6 { margin: 0 !important; border-bottom: none !important; padding-bottom: 0 !important; }'
+    + '.accordion-content { padding-top: 16px; }'
     + '</style>'
     + '</head><body>'
-    + '<div class="copy-btns">'
-    + '<button id="copy-confluence"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1" ry="1"/></svg>Copy for Confluence</button>'
-    + '<button id="copy-servicenow"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1" ry="1"/></svg>Copy for ServiceNow</button>'
+    + '<div class="fab-wrap">'
+    + '<div class="fab-options" id="fab-options">'
+    + '<button class="fab-opt" id="copy-confluence"><svg width="13" height="13" viewBox="0 0 32 32" style="vertical-align:-1px;margin-right:6px"><path d="M2.3 24.2c-.5.8-.2 1.8.6 2.2l6.2 3.6c.8.5 1.8.2 2.2-.6L18 16l-7-4z" fill="#2684FF"/><path d="M29.7 7.8c.5-.8.2-1.8-.6-2.2l-6.2-3.6c-.8-.5-1.8-.2-2.2.6L14 16l7 4z" fill="#2684FF"/></svg>Confluence</button>'
+    + '<button class="fab-opt" id="copy-servicenow"><svg width="13" height="13" viewBox="-1 -1 26 26" style="vertical-align:-1px;margin-right:6px"><circle cx="12" cy="12" r="11" fill="#293740"/><path d="M8.5 15c0-1.8 1.3-3.2 3-3.7l1.5-.4c1.7-.5 3-1.9 3-3.7 0-2-1.8-3.7-4-3.7S8 5.2 8 7.2" stroke="#62D84E" stroke-width="1.7" stroke-linecap="round" fill="none"/><circle cx="12" cy="17.5" r="1.5" fill="#62D84E"/></svg>ServiceNow</button>'
+    + '</div>'
+    + '<button class="fab-btn" id="copy-fab" aria-label="Copy to\u2026"><svg xmlns="http://www.w3.org/2000/svg" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1" ry="1"/></svg></button>'
     + '</div>'
     + '<article class="markdown-body">'
     + htmlBody
@@ -134,11 +167,24 @@ function buildHtml(source) {
     + '<script>'
     + 'mermaid.initialize({ startOnLoad: true, theme: "default" });'
     + '(function() {'
-    + '  var clipIcon = \'<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1" ry="1"/></svg>\';'
-    + '  var checkIcon = \'<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#1a7f37" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>\';'
-    + '  function flashDone(btn, label) {'
+    + '  var checkIcon = \'<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#1a7f37" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-1px;margin-right:4px"><polyline points="20 6 9 17 4 12"/></svg>\';'
+    + '  var fab = document.getElementById("copy-fab");'
+    + '  var fabOptions = document.getElementById("fab-options");'
+    + '  fab.addEventListener("click", function(e) {'
+    + '    e.stopPropagation();'
+    + '    var isOpen = fabOptions.classList.contains("open");'
+    + '    fabOptions.classList.toggle("open", !isOpen);'
+    + '    fab.classList.toggle("open", !isOpen);'
+    + '  });'
+    + '  document.addEventListener("click", function() {'
+    + '    fabOptions.classList.remove("open");'
+    + '    fab.classList.remove("open");'
+    + '  });'
+    + '  fabOptions.addEventListener("click", function(e) { e.stopPropagation(); });'
+    + '  function flashDone(btn) {'
+    + '    var orig = btn.innerHTML;'
     + '    btn.innerHTML = checkIcon + "Copied!";'
-    + '    setTimeout(function() { btn.innerHTML = clipIcon + label; }, 1500);'
+    + '    setTimeout(function() { btn.innerHTML = orig; fabOptions.classList.remove("open"); fab.classList.remove("open"); }, 1200);'
     + '  }'
     + '  function extractDiagramTitle(code) {'
     + '    var yamlMatch = code.match(/^---[\\s\\S]*?title:\\s*(.+?)[\\s\\S]*?---/m);'
@@ -164,6 +210,83 @@ function buildHtml(source) {
     + '      });'
     + '    });'
     + '  });'
+    + '  var ZOOM_STEPS = [0.25, 0.5, 0.75, 1, 1.25, 1.5, 2, 3];'
+    + '  function applyTransform(target, zoom, panX, panY) {'
+    + '    if (zoom === 1 && panX === 0 && panY === 0) { target.style.transform = ""; }'
+    + '    else { target.style.transform = "translate(" + panX + "px," + panY + "px) scale(" + zoom + ")"; }'
+    + '  }'
+    + '  document.querySelectorAll(".mermaid-container").forEach(function(c) {'
+    + '    var state = { zoom: 1, panX: 0, panY: 0 };'
+    + '    var wrap = c.querySelector(".mermaid-zoom-wrap");'
+    + '    var target = wrap.querySelector(".mermaid");'
+    + '    function applyZoom(zoom) {'
+    + '      var old = state.zoom;'
+    + '      state.zoom = zoom;'
+    + '      if (old !== 0) { state.panX = state.panX * (zoom / old); state.panY = state.panY * (zoom / old); }'
+    + '      c.setAttribute("data-zoom", zoom);'
+    + '      c.querySelector(".mermaid-zoom-level").textContent = Math.round(zoom * 100) + "%";'
+    + '      applyTransform(target, state.zoom, state.panX, state.panY);'
+    + '    }'
+    + '    c.querySelector(".zoom-in").addEventListener("click", function(e) {'
+    + '      e.stopPropagation();'
+    + '      var next = state.zoom;'
+    + '      for (var i = 0; i < ZOOM_STEPS.length; i++) { if (ZOOM_STEPS[i] > state.zoom + 0.001) { next = ZOOM_STEPS[i]; break; } }'
+    + '      applyZoom(next);'
+    + '    });'
+    + '    c.querySelector(".zoom-out").addEventListener("click", function(e) {'
+    + '      e.stopPropagation();'
+    + '      var next = state.zoom;'
+    + '      for (var i = ZOOM_STEPS.length - 1; i >= 0; i--) { if (ZOOM_STEPS[i] < state.zoom - 0.001) { next = ZOOM_STEPS[i]; break; } }'
+    + '      applyZoom(next);'
+    + '    });'
+    + '    c.querySelector(".mermaid-zoom-level").addEventListener("click", function(e) {'
+    + '      e.stopPropagation();'
+    + '      applyZoom(1);'
+    + '    });'
+    + '    var pan = { active: false, startX: 0, startY: 0, origPanX: 0, origPanY: 0 };'
+    + '    wrap.addEventListener("mousedown", function(e) {'
+    + '      if (e.button !== 0) return;'
+    + '      pan.active = true;'
+    + '      pan.startX = e.clientX;'
+    + '      pan.startY = e.clientY;'
+    + '      pan.origPanX = state.panX;'
+    + '      pan.origPanY = state.panY;'
+    + '      wrap.classList.add("panning");'
+    + '      target.style.transition = "none";'
+    + '      e.preventDefault();'
+    + '    });'
+    + '    document.addEventListener("mousemove", function(e) {'
+    + '      if (!pan.active) return;'
+    + '      state.panX = pan.origPanX + (e.clientX - pan.startX);'
+    + '      state.panY = pan.origPanY + (e.clientY - pan.startY);'
+    + '      applyTransform(target, state.zoom, state.panX, state.panY);'
+    + '    });'
+    + '    document.addEventListener("mouseup", function() {'
+    + '      if (!pan.active) return;'
+    + '      pan.active = false;'
+    + '      wrap.classList.remove("panning");'
+    + '      target.style.transition = "";'
+    + '    });'
+    + '    wrap.addEventListener("wheel", function(e) {'
+    + '      if (!e.ctrlKey && !e.metaKey) return;'
+    + '      e.preventDefault();'
+    + '      var rect = wrap.getBoundingClientRect();'
+    + '      var mouseX = e.clientX - rect.left;'
+    + '      var mouseY = e.clientY - rect.top;'
+    + '      var contentX = (mouseX - state.panX) / state.zoom;'
+    + '      var contentY = (mouseY - state.panY) / state.zoom;'
+    + '      var factor = e.deltaY < 0 ? 1.1 : 1 / 1.1;'
+    + '      var newZoom = Math.min(10, Math.max(0.1, state.zoom * factor));'
+    + '      state.panX = mouseX - contentX * newZoom;'
+    + '      state.panY = mouseY - contentY * newZoom;'
+    + '      state.zoom = newZoom;'
+    + '      c.setAttribute("data-zoom", newZoom);'
+    + '      c.querySelector(".mermaid-zoom-level").textContent = Math.round(newZoom * 100) + "%";'
+    + '      target.style.transition = "none";'
+    + '      applyTransform(target, state.zoom, state.panX, state.panY);'
+    + '      requestAnimationFrame(function() { target.style.transition = ""; });'
+    + '    }, { passive: false });'
+    + '  });'
     + '  document.getElementById("copy-confluence").addEventListener("click", function() {'
     + '    var btn = this;'
     + '    var clone = document.querySelector(".markdown-body").cloneNode(true);'
@@ -177,7 +300,7 @@ function buildHtml(source) {
     + '      containers[i].parentNode.replaceChild(placeholder, containers[i]);'
     + '    }'
     + '    var blob = new Blob([clone.innerHTML], { type: "text/html" });'
-    + '    navigator.clipboard.write([new ClipboardItem({ "text/html": blob })]).then(function() { flashDone(btn, "Copy for Confluence"); });'
+    + '    navigator.clipboard.write([new ClipboardItem({ "text/html": blob })]).then(function() { flashDone(btn); });'
     + '  });'
     + '  document.getElementById("copy-servicenow").addEventListener("click", function() {'
     + '    var btn = this;'
@@ -189,8 +312,61 @@ function buildHtml(source) {
     + '      img.setAttribute("width", "100%"); img.style.maxWidth = "100%"; img.style.height = "auto";'
     + '      containers[i].innerHTML = ""; containers[i].appendChild(img);'
     + '    }'
+    + '    var details = clone.querySelectorAll("details");'
+    + '    for (var i = 0; i < details.length; i++) {'
+    + '      var d = details[i];'
+    + '      var summary = d.querySelector("summary");'
+    + '      var content = d.querySelector(".accordion-content");'
+    + '      var frag = document.createDocumentFragment();'
+    + '      if (summary) { while (summary.firstChild) frag.appendChild(summary.firstChild); }'
+    + '      if (content) { while (content.firstChild) frag.appendChild(content.firstChild); }'
+    + '      d.parentNode.replaceChild(frag, d);'
+    + '    }'
     + '    var blob = new Blob([clone.innerHTML], { type: "text/html" });'
-    + '    navigator.clipboard.write([new ClipboardItem({ "text/html": blob })]).then(function() { flashDone(btn, "Copy for ServiceNow"); });'
+    + '    navigator.clipboard.write([new ClipboardItem({ "text/html": blob })]).then(function() { flashDone(btn); });'
+    + '  });'
+    + '})();'
+    + '(function() {'
+    + '  document.querySelectorAll("details").forEach(function(details) {'
+    + '    var summary = details.querySelector("summary");'
+    + '    var content = details.querySelector(".accordion-content");'
+    + '    var animating = false;'
+    + '    summary.addEventListener("click", function(e) {'
+    + '      e.preventDefault();'
+    + '      if (animating) return;'
+    + '      if (details.open) {'
+    + '        animating = true;'
+    + '        content.style.height = content.scrollHeight + "px";'
+    + '        content.style.overflow = "hidden";'
+    + '        requestAnimationFrame(function() { requestAnimationFrame(function() {'
+    + '          content.style.transition = "height 0.2s ease-in";'
+    + '          content.style.height = "0px";'
+    + '        }); });'
+    + '        var onClose = function() {'
+    + '          content.removeEventListener("transitionend", onClose);'
+    + '          details.removeAttribute("open");'
+    + '          content.style.cssText = "";'
+    + '          animating = false;'
+    + '        };'
+    + '        content.addEventListener("transitionend", onClose);'
+    + '      } else {'
+    + '        animating = true;'
+    + '        details.setAttribute("open", "");'
+    + '        var endH = content.scrollHeight;'
+    + '        content.style.height = "0px";'
+    + '        content.style.overflow = "hidden";'
+    + '        requestAnimationFrame(function() { requestAnimationFrame(function() {'
+    + '          content.style.transition = "height 0.2s ease-out";'
+    + '          content.style.height = endH + "px";'
+    + '        }); });'
+    + '        var onOpen = function() {'
+    + '          content.removeEventListener("transitionend", onOpen);'
+    + '          content.style.cssText = "";'
+    + '          animating = false;'
+    + '        };'
+    + '        content.addEventListener("transitionend", onOpen);'
+    + '      }'
+    + '    });'
     + '  });'
     + '})();'
     + '(function() {'
@@ -205,6 +381,64 @@ function buildHtml(source) {
 function escapeHtml(str) {
   return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+
+// ---------------------------------------------------------------------------
+// Accordion: wrap heading sections in <details>/<summary>
+// ---------------------------------------------------------------------------
+function parseAccordionNodes(html) {
+  var nodes = [];
+  var lastIndex = 0;
+  var re = /<h([1-6])([^>]*)>([\s\S]*?)<\/h\1>/g;
+  var match;
+  while ((match = re.exec(html)) !== null) {
+    if (match.index > lastIndex) {
+      nodes.push({ type: 'text', content: html.slice(lastIndex, match.index) });
+    }
+    nodes.push({ type: 'heading', level: parseInt(match[1]), attrs: match[2], text: match[3], full: match[0] });
+    lastIndex = re.lastIndex;
+  }
+  if (lastIndex < html.length) {
+    nodes.push({ type: 'text', content: html.slice(lastIndex) });
+  }
+  return nodes;
+}
+
+function renderAccordionNodes(nodes) {
+  var minLevel = 7;
+  for (var i = 0; i < nodes.length; i++) {
+    if (nodes[i].type === 'heading' && nodes[i].level < minLevel) minLevel = nodes[i].level;
+  }
+  if (minLevel === 7) {
+    return nodes.map(function(n) { return n.type === 'text' ? n.content : n.full; }).join('');
+  }
+  var result = '';
+  var i = 0;
+  while (i < nodes.length) {
+    var node = nodes[i];
+    if (node.type === 'text') {
+      result += node.content;
+      i++;
+    } else if (node.level === minLevel) {
+      var sectionNodes = [];
+      i++;
+      while (i < nodes.length && !(nodes[i].type === 'heading' && nodes[i].level <= minLevel)) {
+        sectionNodes.push(nodes[i]);
+        i++;
+      }
+      var inner = renderAccordionNodes(sectionNodes);
+      result += '<details open><summary><h' + minLevel + node.attrs + '>' + node.text + '</h' + minLevel + '></summary>'
+             + '<div class="accordion-content">' + inner + '</div></details>';
+    } else {
+      result += node.full;
+      i++;
+    }
+  }
+  return result;
+}
+
+function makeAccordions(html) {
+  return renderAccordionNodes(parseAccordionNodes(html));
 }
 
 // ---------------------------------------------------------------------------
