@@ -1,18 +1,19 @@
 ---
 name: sn-docs
 description: Search and fetch ServiceNow documentation as clean Markdown. Accepts a search query OR a docs.servicenow.com URL. Use proactively whenever the user asks how something works in ServiceNow, what OOB behavior is, how a ServiceNow feature/table/module is supposed to work, or when you need an authoritative quote or full topic text from the ServiceNow product documentation. Trigger on questions like "how does X work in ServiceNow", "what is the OOB behavior of Y", "how are CIs connected to rate cards", etc.
-argument-hint: "<search query or docs.servicenow.com URL>"
+argument-hint: "<search query or docs.servicenow.com URL> [--release zurich|yokohama|xanadu]"
 allowed-tools: Bash, Read, Write
 ---
 
 # sn-docs: ServiceNow Documentation — Search & Fetch
 
-Unified skill that **searches** docs.servicenow.com and **fetches** full pages as clean Markdown.
-All endpoints work **anonymously** — no cookies, no Playwright, no browser needed.
+Two-stage skill: **search** via the khub API (excellent semantic precision), then **fetch** clean Markdown from the official `ServiceNow/ServiceNowDocs` GitHub repo (LLM-optimized, no DITA artifacts).
+
+The GitHub repo (`github.com/ServiceNow/ServiceNowDocs`) is the official LLM-targeted mirror of docs.servicenow.com, updated at least monthly. Content is cleaner than the khub content API (no `{#ariaid-title1}` noise, structured YAML frontmatter, relative links).
+
+Default release: **australia** (current). Pass `--release zurich|yokohama|xanadu` to target a specific release branch.
 
 ## Input detection
-
-Determine the mode based on the argument:
 
 - **URL mode**: Argument contains `docs.servicenow.com` or starts with `r/` → go to **Fetch by URL**
 - **Search mode**: Anything else → go to **Search then Fetch**
@@ -21,22 +22,25 @@ Determine the mode based on the argument:
 
 ## Fetch by URL (fast path)
 
-Use the `sndoc` CLI:
+Extract the path segment after `/docs/r/` (or after `r/` if already a path), strip the `.html` extension, then fetch from GitHub raw:
 
 ```bash
-# Strip https://www.servicenow.com/docs/ from full URLs, then pass the path:
-sndoc r/australia/api-reference/server-api-reference/c_GlideRecord.html
+# Example: https://www.servicenow.com/docs/r/api-reference/server-api-reference/c_GlideRecord.html
+# → subpath: api-reference/server-api-reference/c_GlideRecord
+RELEASE=australia  # override if --release passed
+SUBPATH="api-reference/server-api-reference/c_GlideRecord"
+curl -sf "https://raw.githubusercontent.com/ServiceNow/ServiceNowDocs/${RELEASE}/markdown/${SUBPATH}.md"
 ```
 
-If `sndoc` returns "no map found for version", the URL is outdated — fall back to **Search mode** using the topic name from the URL.
+If GitHub returns 404, fall back to **Search mode** using the topic name from the URL.
 
-Done. Report the content to the user with the source URL.
+Done. Report content to the user, citing the canonical docs URL from the YAML frontmatter (`canonical_url` field).
 
 ---
 
 ## Search then Fetch
 
-### Step 1 — Search
+### Step 1 — Search via khub API
 
 ```bash
 curl -s --compressed -X POST "https://www.servicenow.com/docs/api/khub/topics/search" \
@@ -49,47 +53,93 @@ Response contains `results[]`, each with: `mapId`, `mapTitle`, `contentId`, `con
 
 ### Step 2 — Pick the best hit
 
-- Multiple releases return duplicate hits (Australia, Zurich, Yokohama, Xanadu, Washington DC, …). **Prefer the newest release bundle** (`Australia` as of 2025) unless the user specifies a target release.
-- Show the user the top 3–5 hits as: `{breadcrumb last segment} — {mapTitle} — {readerUrl}` so they can pick a different one if needed.
+- Multiple releases return duplicate hits (Australia, Zurich, Yokohama, …). **Prefer the newest** (`Australia` as of 2025) unless the user specifies a release.
+- Show the user the top 3–5 hits as: `{breadcrumb last segment} — {mapTitle} — {readerUrl}` so they can pick if needed.
 
-### Step 3 — Fetch content as Markdown
+### Step 3 — Fetch content from GitHub raw
 
-**Option A** — Use `sndoc` with the `readerUrl` path:
+Convert the `readerUrl` to a GitHub raw URL using this rule:
 
-```bash
-# Strip https://www.servicenow.com/docs/ from readerUrl
-sndoc r/australia/api-reference/server-api-reference/c_GlideRecord.html
+```
+readerUrl path:  r/{subpath}.html
+GitHub raw URL:  https://raw.githubusercontent.com/ServiceNow/ServiceNowDocs/{release}/markdown/{subpath}.md
 ```
 
-**Option B** — Fetch directly via the content API (uses `mapId` and `contentId` from search results):
+```bash
+# From readerUrl: https://www.servicenow.com/docs/r/api-reference/c_GlideRecordClientSideAPI.html
+RELEASE=australia
+SUBPATH="api-reference/c_GlideRecordClientSideAPI"
+curl -sf "https://raw.githubusercontent.com/ServiceNow/ServiceNowDocs/${RELEASE}/markdown/${SUBPATH}.md"
+```
+
+**Fallback** — If GitHub returns 404 (topic not in repo), fall back to the khub content API:
 
 ```bash
 curl -s --compressed \
   "https://www.servicenow.com/docs/api/khub/maps/<mapId>/topics/<contentId>/content?format=markdown"
 ```
 
-Option B is faster (single call, no map/topic tree walking) and is preferred when you already have `mapId` and `contentId` from the search results.
-
 ---
 
 ## Output rules
 
-1. Always cite with the full reader URL: `https://www.servicenow.com/docs/<readerUrl-path>`
+1. Always cite with the `canonical_url` from the file's YAML frontmatter (format: `https://www.servicenow.com/docs/<path>`). If using the khub fallback, cite the full readerUrl instead.
 2. When quoting, quote verbatim. Preserve bullet and table structure.
-3. If multiple pages were fetched, clearly separate them with headings.
+3. Optionally surface YAML metadata: `last_updated`, `reading_time_minutes`, `breadcrumb` — useful context for the user.
+4. If multiple pages were fetched, clearly separate them with headings.
+
+---
 
 ## Common Failure Modes
 
 | Symptom | Cause | Fix |
 |---|---|---|
-| `sndoc` "no map found for version" | Outdated URL version segment | Search for the topic to get current URL |
-| Empty or HTML response on content | `?format=markdown` not available for that topic | Omit `?format=markdown`, fetch HTML, strip tags with `sed -e 's/<style[^>]*>.*<\/style>//g' -e 's/<[^>]*>/ /g' -e 's/  */ /g'` |
-| Search returns no results | Query too specific or wrong locale | Broaden the query, try different terms |
-| `403`/`405` on anonymous requests | ServiceNow may re-enable CDN auth | Use the Playwright cookie fallback below |
+| GitHub 404 on content | Topic not in GitHub repo yet (new topic, or coverage gap) | Use khub content API fallback |
+| khub search returns no results | Query too specific or wrong locale | Broaden the query, try different terms |
+| `403`/`405` on khub search | ServiceNow may re-enable CDN auth | See Playwright fallback below |
+| Wrong release content | Multiple releases in search results | Pass `--release` or pick Australia hit explicitly |
 
-## Playwright cookie fallback
+---
 
-As of April 2025, all khub endpoints work anonymously. If ServiceNow re-enables CDN-edge authentication in the future, mint a session cookie with Playwright and pass it to curl:
+## Multi-release lookup
+
+The GitHub repo has branches for each release family. To fetch docs for a specific release:
+
+```bash
+# Yokohama release
+curl -sf "https://raw.githubusercontent.com/ServiceNow/ServiceNowDocs/yokohama/markdown/${SUBPATH}.md"
+```
+
+Available branches: `australia` (latest), `zurich`, `yokohama`, `xanadu`.
+
+---
+
+## Power mode: local clone (optional, for heavy use)
+
+If you need maximum speed and zero rate limits, clone the repo once:
+
+```bash
+gh repo clone ServiceNow/ServiceNowDocs ~/Library/Caches/sn-docs -- --branch australia --depth 1
+```
+
+Then search and fetch locally:
+
+```bash
+# Full-text search across all docs
+rg -l "rate card" ~/Library/Caches/sn-docs/markdown/
+
+# Read a specific file
+cat ~/Library/Caches/sn-docs/markdown/it-asset-management/c_SomeFile.md
+
+# Update (run periodically)
+git -C ~/Library/Caches/sn-docs pull
+```
+
+---
+
+## Playwright cookie fallback (khub search only)
+
+As of April 2025, the khub search endpoint works anonymously. If ServiceNow re-enables CDN-edge authentication:
 
 ```bash
 COOKIE_FILE=/tmp/snow_docs_cookie.txt
@@ -111,4 +161,4 @@ EOF
 fi
 ```
 
-Then add `-H "Cookie: $(cat /tmp/snow_docs_cookie.txt)"` to curl calls. Playwright must be installed at `/tmp/node_modules/playwright` (`cd /tmp && npm i playwright`).
+Add `-H "Cookie: $(cat /tmp/snow_docs_cookie.txt)"` to khub curl calls. GitHub raw content is unauthenticated and unaffected.
