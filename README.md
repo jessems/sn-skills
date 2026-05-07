@@ -4,6 +4,8 @@ A collection of [Claude Code skills](https://docs.anthropic.com/en/docs/claude-c
 
 ## Install
 
+### npx skills CLI (cross-agent)
+
 Install all skills at once:
 
 ```bash
@@ -16,6 +18,10 @@ Or install a specific skill:
 npx skills add jessems/sn-skills --skill sn-docs
 npx skills add jessems/sn-skills --skill sn-md-preview
 ```
+
+### Team members
+
+Internal team members get these skills (plus private internal skills) via the **sn-marketplace** in the Azure DevOps `biha-skills-internal` repo. See that repo's README for setup instructions.
 
 ---
 
